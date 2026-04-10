@@ -20,6 +20,50 @@ class Item(models.Model):
     is_activate = models.BooleanField(default=True)
     created_at = models.DateField(auto_now_add=True)
 
+    def adjust_stock(self, delta, reason='bundle adjustment', reference_table='', reference_id=None):
+        """Ajusta el stock del item y registra un movimiento de inventario."""
+        new_stock = self.stock + delta
+        if new_stock < 0:
+            raise ValueError('No hay suficiente stock para esta operación')
+        self.stock = new_stock
+        self.save(update_fields=['stock'])
+        InventoryMovement.objects.create(
+            item=self,
+            movement_type='in' if delta > 0 else 'out',
+            reason=reason,
+            reference_table=reference_table or '',
+            reference_id=reference_id,
+            quantity=abs(delta),
+        )
+
+    @property
+    def has_stock_history(self):
+        return self.movements.exists()
+
+    @property
+    def has_components(self):
+        return self.type == 'bundle' and hasattr(self, 'bundle') and self.bundle.details.exists()
+
+    @property
+    def is_used_in_any_bundle(self):
+        return self.used_in_bundles.exists()
+
+    def can_change_type(self):
+        return not (self.has_components or self.is_used_in_any_bundle or self.has_stock_history)
+
+    def restore_stock_from_bundle(self):
+        """Restaura el stock de los componentes usados por un bundle antes de eliminarlo."""
+        if self.type != 'bundle' or not hasattr(self, 'bundle'):
+            return
+        for detail in self.bundle.details.select_related('item').all():
+            if detail.quantity > 0:
+                detail.item.adjust_stock(
+                    detail.quantity,
+                    reason='bundle deleted',
+                    reference_table='Bundle',
+                    reference_id=self.bundle.pk,
+                )
+
     def __str__(self):
         return self.name
 
