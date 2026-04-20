@@ -39,7 +39,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
-    'apps.inventory'
+    'apps.inventory',
+    'apps.sales',
 ]
 
 MIDDLEWARE = [
@@ -120,4 +121,8 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
-CORS_ALLOW_ALL_ORIGINS = True  # solo desarrollo
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:5173',   # Vite dev server
+]
+
+CORS_ALLOW_CREDENTIALS = True
