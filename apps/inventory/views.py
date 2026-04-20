@@ -13,6 +13,12 @@ from .serializers import (
 )
 
 
+def _validate_unique_name(name, exclude_id=None):
+    """Valida que no exista otro item con el mismo nombre."""
+    if Item.objects.filter(name__iexact=name).exclude(id=exclude_id).exists():
+        raise ValueError(f'Ya existe un producto con el nombre "{name}"')
+
+
 def _get_material_data(materials):
     """Convierte la lista de materiales entrante en un diccionario de item->cantidad.
 
@@ -78,28 +84,77 @@ class ItemViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         data = request.data.copy()
         item_type = data.get('type')
+        materials = data.get('materials', [])  # ← recibir materiales junto al item
 
         # Fields for Item model
         item_fields = ['name', 'type', 'category', 'unit', 'stock', 'min_stock', 'purchase_price', 'sell_price', 'image']
         item_data = {k: v for k, v in data.items() if k in item_fields}
 
-        item_serializer = self.get_serializer(data=item_data)
-        item_serializer.is_valid(raise_exception=True)
-        item = item_serializer.save()
+        name = item_data.get('name')
+        if name:
+            try:
+                _validate_unique_name(name)
+            except ValueError as exc:
+                return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Create related model based on type
-        if item_type == 'product':
-            description = data.get('description', '')
-            Product.objects.create(item=item, description=description)
-        elif item_type == 'supply':
-            entry_date = data.get('entry_date', timezone.now().date())
-            Supply.objects.create(item=item, entry_date=entry_date)
-        elif item_type == 'bundle':
-            description = data.get('description', '')
-            Bundle.objects.create(item=item, description=description)
-            # Materiales se agregan después vía /api/bundles/{id}/materials/
+        # transaction.atomic() garantiza que si algo falla,
+        # TODO se revierte — ni el item ni los materiales quedan a medias
+        with transaction.atomic():
+            item_serializer = self.get_serializer(data=item_data)
+            item_serializer.is_valid(raise_exception=True)
+            item = item_serializer.save()
+
+            # Create related model based on type
+            if item_type == 'product':
+                description = data.get('description', '')
+                Product.objects.create(item=item, description=description)
+
+            elif item_type == 'supply':
+                entry_date = data.get('entry_date', timezone.now().date())
+                Supply.objects.create(item=item, entry_date=entry_date)
+
+            elif item_type == 'bundle':
+                description = data.get('description', '')
+                bundle = Bundle.objects.create(item=item, description=description)
+
+                # Si vienen materiales, los validamos y guardamos
+                # en la misma transacción — si algo falla, el item tampoco se crea
+                if materials:
+                    try:
+                        material_map = _get_material_data(materials)
+                    except ValueError as exc:
+                        raise serializers.ValidationError({'materials': str(exc)})
+
+                    if not material_map:
+                        raise serializers.ValidationError({
+                            'materials': 'Un arreglo debe tener al menos un componente.'
+                        })
+
+                    for item_id, info in material_map.items():
+                        item_obj = info['item']
+                        qty = info['quantity']
+
+                        # Verificamos stock antes de descontar
+                        if item_obj.stock < qty:
+                            raise serializers.ValidationError({
+                                'materials': f'No hay suficiente stock de "{item_obj.name}". Disponible: {item_obj.stock}'
+                            })
+
+                        item_obj.adjust_stock(
+                            -qty,
+                            reason='bundle created',
+                            reference_table='Bundle',
+                            reference_id=bundle.pk,
+                        )
+
+                        BundleDetail.objects.create(
+                            bundle=bundle,
+                            item_id=item_id,
+                            quantity=qty,
+                        )
 
         return Response(item_serializer.data, status=status.HTTP_201_CREATED)
+
 
     def perform_update(self, serializer):
         """Controla cambios de tipo y mantiene las relaciones de tipo correctas."""
@@ -111,6 +166,13 @@ class ItemViewSet(viewsets.ModelViewSet):
             raise serializers.ValidationError({
                 'type': 'No se puede cambiar el tipo si tiene componentes, ha sido usado en un arreglo o tiene historial.'
             })
+
+        new_name = serializer.validated_data.get('name')
+        if new_name:
+            try:
+                _validate_unique_name(new_name, exclude_id=item.id)
+            except ValueError as exc:
+                raise serializers.ValidationError({'name': str(exc)})
 
         super().perform_update(serializer)
 
@@ -222,7 +284,7 @@ class BundleViewSet(viewsets.ModelViewSet):
             if delta > 0 and item.stock < delta:
                 return Response(
                     {
-                        'error': 'No hay suficiente stock. Disponible: {}'.format(item.stock)
+                        'error': 'No hay suficiente stock para {}. Disponible: {}'.format(item.name, item.stock)
                     },
                     status=status.HTTP_400_BAD_REQUEST
                 )
