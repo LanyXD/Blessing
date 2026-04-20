@@ -39,9 +39,14 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
-    'apps.inventory',
     'apps.sales',
+    'apps.accounts',
+    'apps.audit',
+    'apps.inventory',
+    'apps.commerce',
 ]
+
+AUTH_USER_MODEL = 'accounts.User'
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
