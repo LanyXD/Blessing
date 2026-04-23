@@ -25,23 +25,23 @@ def _get_material_data(materials):
     Valida que cada componente exista, tenga cantidad positiva y no sea un arreglo.
     """
     if not isinstance(materials, list):
-        raise ValueError('Expected a list of materials')
+        raise ValueError('Se esperaba una lista de materiales')
 
     material_map = {}
     for mat in materials:
         if not isinstance(mat, dict):
-            raise ValueError('Each material must be an object')
+            raise ValueError('Cada material debe ser un objeto')
 
         item_id = mat.get('item')
         quantity = mat.get('quantity')
 
         if item_id is None or quantity is None:
-            raise ValueError('Each material must have "item" and "quantity"')
+            raise ValueError('Cada material debe tener "artículo" y "cantidad".')
 
         try:
             quantity = int(quantity)
         except (TypeError, ValueError):
-            raise ValueError('Quantity must be an integer')
+            raise ValueError('La cantidad debe ser un número entero.')
 
         if quantity <= 0:
             raise ValueError('La cantidad debe ser mayor que cero')
@@ -53,6 +53,9 @@ def _get_material_data(materials):
 
         if item.type == 'bundle':
             raise ValueError('No se permiten arreglos dentro de arreglos')
+
+        if item.type == 'supply':
+            raise ValueError('No se permiten insumos dentro de arreglos')
 
         if item_id in material_map:
             material_map[item_id]['quantity'] += quantity

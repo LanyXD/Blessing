@@ -1,6 +1,8 @@
 from django.db import models
+from django.core.validators import MinValueValidator
 
 
+# models.py — sin validators
 class Item(models.Model):
     TYPE_CHOICES = [
         ('product', 'Product'),
@@ -8,17 +10,17 @@ class Item(models.Model):
         ('bundle', 'Bundle'),
     ]
 
-    name = models.CharField(max_length=150)
-    type = models.CharField(max_length=20, choices=TYPE_CHOICES)
-    category = models.CharField(max_length=100)
-    unit = models.CharField(max_length=20)
-    stock = models.IntegerField(default=0)
-    min_stock = models.IntegerField(default=0)
-    purchase_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    sell_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    image = models.CharField(max_length=500, blank=True)
-    is_activate = models.BooleanField(default=True)
-    created_at = models.DateField(auto_now_add=True)
+    name           = models.CharField(max_length=150)
+    type           = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    category       = models.CharField(max_length=100)
+    unit           = models.CharField(max_length=20)
+    stock          = models.IntegerField(default=0)          
+    min_stock      = models.IntegerField(default=0)           
+    purchase_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)  
+    sell_price     = models.DecimalField(max_digits=10, decimal_places=2, default=0)  
+    image          = models.CharField(max_length=500, blank=True)
+    is_activate    = models.BooleanField(default=True)
+    created_at     = models.DateField(auto_now_add=True)
 
     def adjust_stock(self, delta, reason='bundle adjustment', reference_table='', reference_id=None):
         """Ajusta el stock del item y registra un movimiento de inventario."""
@@ -115,7 +117,7 @@ class BundleDetail(models.Model):
         on_delete=models.CASCADE,
         related_name='details'
     )
-    quantity = models.IntegerField()
+    quantity = models.IntegerField(validators=[MinValueValidator(0, message='Debe ser mayor o igual a 0.')])
 
     def __str__(self):
         return f"{self.quantity} x {self.item.name} in {self.bundle.item.name}"
@@ -135,7 +137,7 @@ class InventoryMovement(models.Model):
     reason = models.CharField(max_length=30)
     reference_id = models.IntegerField(null=True, blank=True)
     reference_table = models.CharField(max_length=50, blank=True)
-    quantity = models.IntegerField()
+    quantity = models.IntegerField(validators=[MinValueValidator(0, message='Debe ser mayor o igual a 0.')])
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
