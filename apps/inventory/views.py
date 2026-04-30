@@ -11,6 +11,7 @@ from .serializers import (
     SupplySerializer,
     BundleSerializer
 )
+from apps.sales.models import SaleItem  # ajusta el path según tu estructura
 
 
 def _validate_unique_name(name, exclude_id=None):
@@ -20,8 +21,15 @@ def _validate_unique_name(name, exclude_id=None):
 
 
 def _get_material_data(materials):
+    """FormData envía todo como string — parseamos si es necesario"""
+    if isinstance(materials, str):
+        import json
+        try:
+            materials = json.loads(materials)
+        except json.JSONDecodeError:
+            raise ValueError('Formato de materiales inválido')
+        
     """Convierte la lista de materiales entrante en un diccionario de item->cantidad.
-
     Valida que cada componente exista, tenga cantidad positiva y no sea un arreglo.
     """
     if not isinstance(materials, list):
@@ -85,6 +93,8 @@ class ItemViewSet(viewsets.ModelViewSet):
     serializer_class = ItemSerializer
 
     def create(self, request, *args, **kwargs):
+        print('MATERIALS RECIBIDOS:', request.data.get('materials'))
+
         data = request.data.copy()
         item_type = data.get('type')
         materials = data.get('materials', [])  # ← recibir materiales junto al item
@@ -162,6 +172,13 @@ class ItemViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         """Controla cambios de tipo y mantiene las relaciones de tipo correctas."""
         item = self.get_object()
+
+        # ── Eliminar imagen si el frontend envió el flag remove_image ────────
+        if self.request.data.get('remove_image') == 'true':
+            if item.image:
+                item.image.delete(save=False)  # borra el archivo físico
+            # Fuerza image=None en el serializer para que no la restaure
+            serializer.validated_data['image'] = None
         new_type = serializer.validated_data.get('type', item.type)
         old_type = item.type
 
@@ -205,8 +222,16 @@ class ItemViewSet(viewsets.ModelViewSet):
                 )
 
     def destroy(self, request, *args, **kwargs):
-        """Restaura stock si se elimina un bundle a través del endpoint de items."""
         item = self.get_object()
+
+        # """Protección: no eliminar si tiene historial de ventas"""
+        if SaleItem.objects.filter(product=item).exists():
+            return Response(
+                {'error': 'No se puede eliminar este producto porque tiene historial de ventas.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        """Restaura stock si se elimina un bundle a través del endpoint de items."""
         if item.type == 'bundle' and hasattr(item, 'bundle'):
             _restore_bundle_stock(item.bundle)
         return super().destroy(request, *args, **kwargs)
@@ -335,6 +360,15 @@ class BundleViewSet(viewsets.ModelViewSet):
         )
 
     def destroy(self, request, *args, **kwargs):
+        bundle = self.get_object()
+
+        # Protección: no eliminar si el Item del bundle tiene historial de ventas
+        if SaleItem.objects.filter(product=bundle.item).exists():
+            return Response(
+                {'error': 'No se puede eliminar este arreglo porque tiene historial de ventas.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         """Restaura el stock usado por un bundle antes de eliminarlo."""
         bundle = self.get_object()
         _restore_bundle_stock(bundle)
