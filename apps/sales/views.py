@@ -29,7 +29,8 @@ class SaleProductListView(APIView):
                 'stock_minimum': int(item.min_stock),
                 'sell_price':    float(item.sell_price),
                 'type':          item.type,       # 'product' | 'bundle' — tal cual está en la BD
-                'image':         item.image or None,
+                'image': request.build_absolute_uri(item.image.url) if item.image else None,
+
             }
             for item in items
         ]
