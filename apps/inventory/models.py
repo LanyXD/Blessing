@@ -18,7 +18,11 @@ class Item(models.Model):
     min_stock      = models.IntegerField(default=0)           
     purchase_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)  
     sell_price     = models.DecimalField(max_digits=10, decimal_places=2, default=0)  
-    image          = models.CharField(max_length=500, blank=True)
+    image = models.ImageField(
+        upload_to='products/',  # se guarda en MEDIA_ROOT/products/
+        blank=True,
+        null=True,
+    )
     is_activate    = models.BooleanField(default=True)
     created_at     = models.DateField(auto_now_add=True)
 
@@ -88,6 +92,7 @@ class Supply(models.Model):
         primary_key=True,
         related_name='supply'
     )
+    description = models.TextField(blank=True, default='')
     entry_date = models.DateField()
     is_sellable = models.BooleanField(default=False)
 
