@@ -1,8 +1,6 @@
 from django.contrib import admin
-from .models import (
-    PurchasePlace, Purchase, PurchaseDetail,
-    Customer, Sale, SaleDetail,
-    Order, OrderDetail
+from apps.commerce.purchases.models import (
+    PurchasePlace, Supplier, Purchase, PurchaseDetail
 )
 
 
@@ -11,41 +9,19 @@ class PurchaseDetailInline(admin.TabularInline):
     extra = 0
 
 
-class SaleDetailInline(admin.TabularInline):
-    model = SaleDetail
-    extra = 0
-
-
-class OrderDetailInline(admin.TabularInline):
-    model = OrderDetail
-    extra = 0
-
-
 @admin.register(PurchasePlace)
 class PurchasePlaceAdmin(admin.ModelAdmin):
     list_display = ('name', 'address', 'is_active')
 
 
-@admin.register(Purchase)
-class PurchaseAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user', 'place', 'date', 'total')
-    inlines = [PurchaseDetailInline]
-
-
-@admin.register(Customer)
-class CustomerAdmin(admin.ModelAdmin):
-    list_display = ('name', 'nit', 'phone')
+@admin.register(Supplier)
+class SupplierAdmin(admin.ModelAdmin):
+    list_display = ('name', 'contact', 'phone', 'nit', 'is_active')
     search_fields = ('name', 'nit')
 
 
-@admin.register(Sale)
-class SaleAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user', 'customer', 'date', 'total')
-    inlines = [SaleDetailInline]
-
-
-@admin.register(Order)
-class OrderAdmin(admin.ModelAdmin):
-    list_display = ('id', 'customer', 'user', 'date', 'delivery_date', 'status', 'total')
-    list_filter = ('status',)
-    inlines = [OrderDetailInline]
+@admin.register(Purchase)
+class PurchaseAdmin(admin.ModelAdmin):
+    list_display = ('id', 'user', 'supplier', 'place', 'date', 'total')
+    list_filter  = ('supplier', 'place')
+    inlines      = [PurchaseDetailInline]
