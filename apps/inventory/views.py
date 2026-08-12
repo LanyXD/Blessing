@@ -101,7 +101,7 @@ class ItemViewSet(viewsets.ModelViewSet):
 
         data = request.data.copy()
         item_type = data.get('type')
-        materials = data.get('materials', [])  # ← recibir materiales junto al item
+        materials = data.get('materials', [])
 
         # Fields for Item model
         item_fields = ['name', 'type', 'category', 'unit', 'stock', 'min_stock', 'purchase_price', 'sell_price', 'image']
